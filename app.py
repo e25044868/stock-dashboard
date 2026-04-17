@@ -32,13 +32,6 @@ DEFAULT_SYMBOLS = [
     "BTC-USD",
 ]
 
-FUTURES_SYMBOLS = [
-    "^TWII",  # 台股加權，先當台指觀察基準
-    "TXF_PROXY",  # 大台代理顯示
-    "MTX_PROXY",  # 小台代理顯示
-    "TMF_PROXY",  # 微台代理顯示
-]
-
 DISPLAY_NAME_MAP = {
     "2330.TW": "台積電",
     "0050.TW": "元大台灣50",
@@ -248,6 +241,26 @@ def index():
         refresh_seconds=REFRESH_SECONDS,
         local_ip=get_local_ip(),
         port=PORT,
+        futures_specs=[
+            {
+                "code": "TX",
+                "name": "台指期",
+                "point_value": "1點 = 200元",
+                "desc": "大台，波動與損益放大最快",
+            },
+            {
+                "code": "MTX",
+                "name": "小型台指",
+                "point_value": "1點 = 50元",
+                "desc": "小台，較適合口數分批",
+            },
+            {
+                "code": "TMF",
+                "name": "微型台指",
+                "point_value": "1點 = 10元",
+                "desc": "微台，較適合新手練習與控風險",
+            },
+        ],
     )
 
 
@@ -386,6 +399,84 @@ HTML_TEMPLATE = r"""
       padding: 16px;
       margin-bottom: 14px;
     }
+    .terminal-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .terminal-title {
+      font-weight: 800;
+      letter-spacing: .3px;
+      font-size: 13px;
+    }
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .terminal-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+      background: rgba(255,255,255,0.16);
+    }
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .legend-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .legend-code {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 8px;
+      margin-bottom: 10px;
+      background: #091321;
+    }
+    .legend-name {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+    .legend-point {
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .legend-desc {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .market-note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .market-note strong { color: var(--text); }
     .section-head {
       display: flex;
       justify-content: space-between;
@@ -419,6 +510,7 @@ HTML_TEMPLATE = r"""
       padding: 14px;
       position: relative;
       overflow: hidden;
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 30%);
     }
     .quote-card::after {
       content: "";
@@ -459,6 +551,29 @@ HTML_TEMPLATE = r"""
       font-weight: 900;
       letter-spacing: .3px;
       margin: 6px 0 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sub-quote-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .sub-quote-box {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      background: rgba(255,255,255,0.02);
+    }
+    .sub-quote-box .k {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .sub-quote-box .v {
+      font-size: 13px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
     }
     .change-row {
       display: flex;
@@ -549,6 +664,7 @@ HTML_TEMPLATE = r"""
       .cards-grid { grid-template-columns: repeat(2, 1fr); }
       .cards-grid.futures-grid { grid-template-columns: repeat(2, 1fr); }
       .stats { grid-template-columns: repeat(2, 1fr); }
+      .legend-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 700px) {
@@ -600,6 +716,10 @@ HTML_TEMPLATE = r"""
     </div>
 
     <div class="section">
+      <div class="terminal-bar">
+        <div class="terminal-title">MARKET TERMINAL / FUTURES BOARD</div>
+        <div class="terminal-dots"><span></span><span></span><span></span></div>
+      </div>
       <div class="section-head">
         <div class="section-title">台指 / 小台 / 微台專區</div>
         <div class="pill" id="futuresCount">--</div>
@@ -633,9 +753,22 @@ HTML_TEMPLATE = r"""
         </div>
       </div>
       <div class="cards-grid" id="watchCards"></div>
+      <div class="legend-grid">
+        {% for item in futures_specs %}
+        <div class="legend-card">
+          <div class="legend-code">{{ item.code }}</div>
+          <div class="legend-name">{{ item.name }}</div>
+          <div class="legend-point">{{ item.point_value }}</div>
+          <div class="legend-desc">{{ item.desc }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="market-note">
+        <strong>目前說明：</strong>這個專區裡，只有台股加權指數比較接近現貨指數觀察；台指近月 / 小台 / 微台目前仍是示意值，用來先把版面、欄位、顏色、手機卡片與走勢小圖做完整。<br>
+        等你之後接到真正的期貨報價源，再把這三個示意商品替換成真實即時數據，就會更像正式看盤軟體。
+      </div>
       <div class="footer">
-        台指 / 小台 / 微台目前先做示意專區。若你之後接到正式期貨報價源，可以直接把代理資料替換成真實資料。<br>
-        走勢小圖目前顯示最近幾次刷新價格，用來快速看方向感。之後可再升級成真正分時圖。
+        走勢小圖目前顯示最近幾次刷新價格，用來快速看方向感。之後可再升級成真正分時圖與即時成交欄位。
       </div>
     </div>
   </div>
@@ -692,6 +825,9 @@ HTML_TEMPLATE = r"""
     function renderCard(q) {
       const c = cls(q.change);
       const badgeText = q.category === 'futures' ? '期貨專區' : '自選';
+      const high = Number(q.price * 1.002).toFixed(2);
+      const low = Number(q.price * 0.998).toFixed(2);
+      const ref = Number(q.price - q.change).toFixed(2);
       return `
         <div class="card quote-card">
           <div class="card-top">
@@ -705,6 +841,20 @@ HTML_TEMPLATE = r"""
           <div class="change-row">
             <div class="change-chip ${c}">${fmtSigned(q.change)}</div>
             <div class="change-chip ${c}">${fmtSigned(q.change_percent)}%</div>
+          </div>
+          <div class="sub-quote-row">
+            <div class="sub-quote-box">
+              <div class="k">參考昨收</div>
+              <div class="v">${ref}</div>
+            </div>
+            <div class="sub-quote-box">
+              <div class="k">示意高點</div>
+              <div class="v">${high}</div>
+            </div>
+            <div class="sub-quote-box">
+              <div class="k">示意低點</div>
+              <div class="v">${low}</div>
+            </div>
           </div>
           <div class="sparkline-wrap">${sparklineSvg(q.history || [], q.change)}</div>
           <div class="meta">
